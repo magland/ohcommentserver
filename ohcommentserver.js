@@ -1,13 +1,16 @@
 var	url=require('url');
 var http=require('http');
-var fs=require('fs');
 var DATABASE=require('./databasemanager').DATABASE;
-var x=3;
+
+var config={listen_port:9001}; //put this in ohcommentserver.json
 
 http.createServer(function (REQ, RESP) {
 	console.log ('REQUEST: '+REQ.url);
 	
 	var url_parts = url.parse(REQ.url,true);
+
+	var DB=new DATABASE('ohcommentserver');
+	DB.setCollection('comments');
 	
 	if (REQ.method == 'OPTIONS') {
 		var headers = {};
@@ -27,9 +30,36 @@ http.createServer(function (REQ, RESP) {
 	else if(REQ.method=='GET') {
 		if (url_parts.pathname=='/ohcommentserver/getAllComments') {
 			var page_id=url_parts.query.page_id||'';
+			console.log('get_all_comments');
             get_all_comments(page_id,function(resp) {
+            	console.log(page_id);
+            	console.log(JSON.stringify(resp));
 				send_json_response(resp);
 			});
+		}
+		else if (url_parts.pathname=='/ohcommentserver/addComment') {
+			var comment0={
+				page_id:url_parts.query.page_id,
+				name:url_parts.query.name,
+				date:(new Date()).getTime(),
+				date_human:new Date(),
+				email:url_parts.query.email,
+				website:url_parts.query.website,
+				content:url_parts.query.content,
+				comment_id:make_random_id()
+			};
+			if ((!comment0.page_id)||(!comment0.name)||(!comment0.email)||(!comment0.content)||(!comment0.comment_id)) {
+				send_json_response({success:false,error:"invalid comment"});
+				return;
+			}
+			if (JSON.stringify(comment0).length>5000) {
+				send_json_response({success:false,error:"invalid comment (*)"});
+				return;
+			}
+			add_comment(comment0,function(resp) {
+				send_json_response(resp);
+			});
+
 		}
 		else {
 			send_json_response({success:false,error:'Unrecognized url path.'});
@@ -37,72 +67,32 @@ http.createServer(function (REQ, RESP) {
 	}
 	else if(REQ.method=='POST') {
         send_json_response({success:false,error:'Unexpected POST: '});
-        
-		//upload a file!
-		
-        /*
-		if (url_parts.pathname=='/wisdmfileserver/setFileData') {
-			var fsname=url_parts.query.fsname||'';
-			var path=url_parts.query.path||'';
-			var text=url_parts.query.text||'';
-			
-			if (!create_path_for_file(path,wisdmconfig.wisdmfileserver.data_path+'/files/'+fsname)) {
-				send_json({success:false,error:'Unable to create folder for file.'});
-				return;
-			}
-			
-			var path0=wisdmconfig.wisdmfileserver.data_path+'/files/'+fsname+'/'+path;
-			//write to a temporary file (later we'll move it over)
-			var tmppath0=path0+'.'+make_random_id(4)+'.tmp';
-			
-			var file_size=REQ.headers['content-length'];
-			if (file_size>10*1000*1000) {
-				send_json_response({success:false,error:'File is too large: '+file_size});
-				return;
-			}
-			
-			var out_stream=fs.createWriteStream(tmppath0);
-			
-			var byte_count=0;
-			
-			var done=false;
-			REQ.on('data',function(d) {
-				if (done) return;
-				out_stream.write(d);
-				byte_count+=d.length;
-			});
-			REQ.on('end',function() {
-				if (done) return;
-				if (byte_count!=file_size) {
-					send_json_response({success:false,error:'Unexpected file size: '+byte_count+' <> '+file_size});
-					done=true;
-					return;
-				}
-				if (file_exists(path0)) {
-					remove_file(path0);
-				}
-				if (!rename_file(tmppath0,path0)) {
-					send_json_response({success:false,error:'Problem renaming file'});
-					done=true;
-					return;
-				}
-				send_json_response({success:true});
-				done=true;
-			});
-		}
-		else {
-			send_json_response({success:false,error:'Unexpected path for POST: '+url_parts.pathname});
-		}
-        */
+	}
+
+	function get_all_comments(page_id,callback) {
+		DB.find({page_id:page_id},{page_id:1,name:1,email:1,date:1,webpage:1,content:1,comment_id:1},function(tmp) {
+			var ret={success:tmp.success,error:tmp.error,comments:tmp.docs};
+			callback(ret);
+		});
+	}
+	function add_comment(comment0,callback) {
+		DB.insert(comment0,function(err) {
+			if (!err) callback({success:true});
+			else callback({success:false,error:JSON.stringify(err)});
+		});
 	}
 	
 	function send_json_response(obj) {
 		RESP.writeHead(200, {"Access-Control-Allow-Origin":"*", "Content-Type":"application/json"});
 		RESP.end(JSON.stringify(obj));
 	}
-	function send_text_response(text) {
-		RESP.writeHead(200, {"Access-Control-Allow-Origin":"*", "Content-Type":"text/plain"});
-		RESP.end(text);
+
+	function make_random_id(numchars) {
+		if (!numchars) numchars=10;
+		var text = "";
+		var possible = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+		for( var i=0; i < numchars; i++ ) text += possible.charAt(Math.floor(Math.random() * possible.length));
+		return text;
 	}
 }).listen(config.listen_port);
 console.log ('Listening on port '+config.listen_port);
