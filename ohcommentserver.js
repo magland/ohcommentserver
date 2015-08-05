@@ -26,7 +26,7 @@ http.createServer(function (REQ, RESP) {
 		// IE8 does not allow domains to be specified, just the *
 		// headers["Access-Control-Allow-Origin"] = req.headers.origin;
 		//headers["Access-Control-Allow-Origin"] = "*";
-		
+
 		//headers["Access-Control-Allow-Methods"] = "POST, GET, PUT, DELETE, OPTIONS";
 		headers["Access-Control-Allow-Methods"] = "GET";
 		headers["Access-Control-Allow-Credentials"] = false;
@@ -76,7 +76,7 @@ http.createServer(function (REQ, RESP) {
 			}
 			add_comment(comment0,function(resp) {
 				if (resp.success) {
-					var url0='http://localhost:4000/commentview/?comment_id='+comment0.comment_id;
+					var url0='http://{{ site.url }}/commentview/?comment_id='+comment0.comment_id;
 					var message0='A new comment has been received from page: '+comment0.page_id+'.\n\n';
 					message0+='Name: '+comment0.name+', date: '+comment0.date+' email: '+comment0.email+', website: '+comment0.website+'\n\n';
 					message0+='Click here to accept or reject this comment: '+url0+'\n\n';
