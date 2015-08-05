@@ -1,8 +1,10 @@
 var	url=require('url');
 var http=require('http');
 var DATABASE=require('./databasemanager').DATABASE;
+var nodemailer = require('nodemailer');
+var fs = require('fs');
 
-var config={listen_port:9001}; //put this in ohcommentserver.json
+var config=JSON.parse(fs.readFileSync('ohcommentserver.json', 'utf8'));
 
 http.createServer(function (REQ, RESP) {
 	console.log ('REQUEST: '+REQ.url);
@@ -11,6 +13,10 @@ http.createServer(function (REQ, RESP) {
 
 	var DB=new DATABASE('ohcommentserver');
 	DB.setCollection('comments');
+
+	var admin_code=url_parts.query.admin_code||'';
+	var admin=false;
+	if (admin_code===config.admin_code) admin=true;
 	
 	if (REQ.method == 'OPTIONS') {
 		var headers = {};
@@ -31,8 +37,17 @@ http.createServer(function (REQ, RESP) {
 		if (url_parts.pathname=='/ohcommentserver/getAllComments') {
 			var page_id=url_parts.query.page_id||'';
 			console.log('get_all_comments');
-            get_all_comments(page_id,function(resp) {
+            get_all_comments(page_id,admin,function(resp) {
             	console.log(page_id);
+            	console.log(JSON.stringify(resp));
+				send_json_response(resp);
+			});
+		}
+		else if ((admin)&&(url_parts.pathname=='/ohcommentserver/getComment')) {
+			var comment_id=url_parts.query.comment_id||'';
+			console.log('get_comment');
+            get_comment(comment_id,admin,function(resp) {
+            	console.log(comment_id);
             	console.log(JSON.stringify(resp));
 				send_json_response(resp);
 			});
@@ -46,6 +61,7 @@ http.createServer(function (REQ, RESP) {
 				email:url_parts.query.email,
 				website:url_parts.query.website,
 				content:url_parts.query.content,
+				status:'pending',
 				comment_id:make_random_id()
 			};
 			if ((!comment0.page_id)||(!comment0.name)||(!comment0.email)||(!comment0.content)||(!comment0.comment_id)) {
@@ -57,9 +73,43 @@ http.createServer(function (REQ, RESP) {
 				return;
 			}
 			add_comment(comment0,function(resp) {
+				if (resp.success) {
+					var url0='http://localhost:4000/commentview/?comment_id='+comment0.comment_id;
+					var message0='A new comment has been received from page: '+comment0.page_id+'.\n\n';
+					message0+='Name: '+comment0.name+', date: '+comment0.date+' email: '+comment0.email+', website: '+comment0.website+'\n\n';
+					message0+='Click here to accept or reject this comment: '+url0+'\n\n';
+					message0+=comment0.content+'\n\n\n';
+					message0+=JSON.stringify(comment0);
+					send_email({from:config.from_email,to:config.to_email,subject:'new comment received',text:message0},
+						function(err,info) {
+							console.log('Sent email (or tried)...'+err);
+							console.log(JSON.stringify(info));
+						}
+					);
+				}
 				send_json_response(resp);
 			});
-
+		}
+		else if ((admin)&&(url_parts.pathname=='/ohcommentserver/setCommentStatus')) {
+			var comment_id=url_parts.query.comment_id;
+			DB.find({comment_id:comment_id},{status:1},function(tmp) {
+				if ((tmp.success)&&(tmp.docs.length==1)) {
+					DB.update({_id:tmp.docs[0]._id},{$set:{status:url_parts.query.status}},function(err) {
+						if (!err) send_json_response({success:true});
+						else send_json_response({success:false,error:JSON.stringify(err)}); 
+					});
+				}
+				else {
+					send_json_response({success:false,error:'Unable to find comment: '+comment_id+' '+tmp.docs.length});
+				}
+			});
+		}
+		else if ((admin)&&(url_parts.pathname=='/ohcommentserver/removeComment')) {
+			var comment_id=url_parts.query.comment_id;
+			DB.remove({comment_id:comment_id},function(err) {
+				if (!err) send_json_response({success:true});
+				else send_json_response({success:false,error:JSON.stringify(err)}); 
+			});
 		}
 		else {
 			send_json_response({success:false,error:'Unrecognized url path.'});
@@ -69,8 +119,45 @@ http.createServer(function (REQ, RESP) {
         send_json_response({success:false,error:'Unexpected POST: '});
 	}
 
-	function get_all_comments(page_id,callback) {
-		DB.find({page_id:page_id},{page_id:1,name:1,email:1,date:1,webpage:1,content:1,comment_id:1},function(tmp) {
+	var the_transporter = nodemailer.createTransport();
+	function send_email(obj,callback) {
+		the_transporter.sendMail(obj,callback);
+	}
+
+	function get_comment(comment_id,admin,callback) {
+		var XX={page_id:1,name:1,date:1,content:1};
+		var YY={comment_id:comment_id};
+		if (admin) {
+			XX.email=1; XX.webpage=1; XX.comment_id=1; XX.status=1;
+		}
+		else {
+			YY.status='accepted';
+		}
+		DB.find(YY,XX,function(tmp) {
+			if ((tmp.success)&&(tmp.docs)&&(!admin)) {
+				for (var j=0; j<tmp.docs.length; j++) {
+					delete tmp.docs[j]._id;
+				}
+			}
+			var ret={success:tmp.success,error:tmp.error,comments:tmp.docs};
+			callback(ret);
+		});
+	}
+	function get_all_comments(page_id,admin,callback) {
+		var XX={page_id:1,name:1,date:1,content:1};
+		var YY={page_id:page_id};
+		if (admin) {
+			XX.email=1; XX.webpage=1; XX.comment_id=1; XX.status=1;
+		}
+		else {
+			YY.status='accepted';
+		}
+		DB.find(YY,XX,function(tmp) {
+			if ((tmp.success)&&(tmp.docs)&&(!admin)) {
+				for (var j=0; j<tmp.docs.length; j++) {
+					delete tmp.docs[j]._id;
+				}
+			}
 			var ret={success:tmp.success,error:tmp.error,comments:tmp.docs};
 			callback(ret);
 		});
