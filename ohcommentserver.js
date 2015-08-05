@@ -25,8 +25,10 @@ http.createServer(function (REQ, RESP) {
 		
 		// IE8 does not allow domains to be specified, just the *
 		// headers["Access-Control-Allow-Origin"] = req.headers.origin;
-		headers["Access-Control-Allow-Origin"] = "*";
-		headers["Access-Control-Allow-Methods"] = "POST, GET, PUT, DELETE, OPTIONS";
+		//headers["Access-Control-Allow-Origin"] = "*";
+		
+		//headers["Access-Control-Allow-Methods"] = "POST, GET, PUT, DELETE, OPTIONS";
+		headers["Access-Control-Allow-Methods"] = "GET";
 		headers["Access-Control-Allow-Credentials"] = false;
 		headers["Access-Control-Max-Age"] = '86400'; // 24 hours
 		headers["Access-Control-Allow-Headers"] = "X-Requested-With, X-HTTP-Method-Override, Content-Type, Accept";
@@ -43,10 +45,10 @@ http.createServer(function (REQ, RESP) {
 				send_json_response(resp);
 			});
 		}
-		else if ((admin)&&(url_parts.pathname=='/ohcommentserver/getComment')) {
+		else if (url_parts.pathname=='/ohcommentserver/getComment') {
 			var comment_id=url_parts.query.comment_id||'';
 			console.log('get_comment');
-            get_comment(comment_id,admin,function(resp) {
+            get_comment(comment_id,function(resp) {
             	console.log(comment_id);
             	console.log(JSON.stringify(resp));
 				send_json_response(resp);
@@ -90,7 +92,7 @@ http.createServer(function (REQ, RESP) {
 				send_json_response(resp);
 			});
 		}
-		else if ((admin)&&(url_parts.pathname=='/ohcommentserver/setCommentStatus')) {
+		else if (url_parts.pathname=='/ohcommentserver/setCommentStatus') {
 			var comment_id=url_parts.query.comment_id;
 			DB.find({comment_id:comment_id},{status:1},function(tmp) {
 				if ((tmp.success)&&(tmp.docs.length==1)) {
@@ -104,7 +106,7 @@ http.createServer(function (REQ, RESP) {
 				}
 			});
 		}
-		else if ((admin)&&(url_parts.pathname=='/ohcommentserver/removeComment')) {
+		else if (url_parts.pathname=='/ohcommentserver/removeComment') {
 			var comment_id=url_parts.query.comment_id;
 			DB.remove({comment_id:comment_id},function(err) {
 				if (!err) send_json_response({success:true});
@@ -124,21 +126,13 @@ http.createServer(function (REQ, RESP) {
 		the_transporter.sendMail(obj,callback);
 	}
 
-	function get_comment(comment_id,admin,callback) {
+	function get_comment(comment_id,callback) {
 		var XX={page_id:1,name:1,date:1,content:1};
 		var YY={comment_id:comment_id};
-		if (admin) {
+		{
 			XX.email=1; XX.webpage=1; XX.comment_id=1; XX.status=1;
 		}
-		else {
-			YY.status='accepted';
-		}
 		DB.find(YY,XX,function(tmp) {
-			if ((tmp.success)&&(tmp.docs)&&(!admin)) {
-				for (var j=0; j<tmp.docs.length; j++) {
-					delete tmp.docs[j]._id;
-				}
-			}
 			var ret={success:tmp.success,error:tmp.error,comments:tmp.docs};
 			callback(ret);
 		});
