@@ -38,8 +38,9 @@ http.createServer(function (REQ, RESP) {
 	else if(REQ.method=='GET') {
 		if (url_parts.pathname=='/ohcommentserver/getAllComments') {
 			var page_id=url_parts.query.page_id||'';
+			var status=url_parts.query.status||'';
 			console.log('get_all_comments');
-            get_all_comments(page_id,admin,function(resp) {
+            get_all_comments(page_id,status,admin,function(resp) {
             	console.log(page_id);
             	console.log(JSON.stringify(resp));
 				send_json_response(resp);
@@ -76,7 +77,7 @@ http.createServer(function (REQ, RESP) {
 			}
 			add_comment(comment0,function(resp) {
 				if (resp.success) {
-					var url0='http://{{ site.url }}/commentview/?comment_id='+comment0.comment_id;
+					var url0=config.site_url+'/commentview/?comment_id='+comment0.comment_id;
 					var message0='A new comment has been received from page: '+comment0.page_id+'.\n\n';
 					message0+='Name: '+comment0.name+', date: '+comment0.date+' email: '+comment0.email+', website: '+comment0.website+'\n\n';
 					message0+='Click here to accept or reject this comment: '+url0+'\n\n';
@@ -137,9 +138,12 @@ http.createServer(function (REQ, RESP) {
 			callback(ret);
 		});
 	}
-	function get_all_comments(page_id,admin,callback) {
+	function get_all_comments(page_id,status,admin,callback) {
 		var XX={page_id:1,name:1,date:1,content:1};
-		var YY={page_id:page_id};
+		var YY={};
+		if ((page_id)||(!admin)) YY.page_id=page_id;
+		if (status) YY.status=status;
+		else YY.status={$ne:'trashed'};
 		if (admin) {
 			XX.email=1; XX.webpage=1; XX.comment_id=1; XX.status=1;
 		}

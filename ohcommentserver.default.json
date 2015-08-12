@@ -2,5 +2,6 @@
 	"listen_port":"9001",
 	"admin_code":"admin_code",
 	"from_email":"jeremy.magland@gmail.com",
-	"to_email":"jeremy.magland@gmail.com"
+	"to_email":"jeremy.magland@gmail.com",
+	"site_url":"http://localhost:4000"
 }
